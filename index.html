@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project: BLIND FAITH</title>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --text-color: #33ff00;
+            --manual-bg: #e0e0e0;
+            --manual-text: #222;
+            --error-color: #ff0000;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #game-container {
+            display: flex;
+            width: 900px;
+            height: 600px;
+            border: 2px solid var(--text-color);
+            box-shadow: 0 0 20px rgba(51, 255, 0, 0.2);
+        }
+
+        /* 왼쪽: 매뉴얼 영역 */
+        #manual-section {
+            width: 40%;
+            background-color: var(--manual-bg);
+            color: var(--manual-text);
+            padding: 20px;
+            border-right: 5px solid #000;
+            position: relative;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .paper-texture {
+            font-family: 'Times New Roman', serif;
+            line-height: 1.6;
+        }
+
+        h2 { border-bottom: 2px solid #000; padding-bottom: 10px; margin-top: 0; }
+        .stamp {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            border: 3px double #d00;
+            color: #d00;
+            padding: 5px 10px;
+            font-weight: bold;
+            transform: rotate(-15deg);
+            opacity: 0.8;
+        }
+
+        /* 오른쪽: 컨트롤 패널 */
+        #control-section {
+            width: 60%;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        #screen-log {
+            height: 150px;
+            border: 1px solid var(--text-color);
+            padding: 10px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            background: rgba(0, 20, 0, 0.8);
+            font-size: 0.9em;
+        }
+
+        .log-entry { margin-bottom: 5px; }
+        .system-msg { color: #0ff; }
+        .error-msg { color: var(--error-color); }
+
+        #interaction-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 1px dashed #333;
+        }
+
+        /* 인터랙션 요소들 */
+        button {
+            background: transparent;
+            border: 2px solid var(--text-color);
+            color: var(--text-color);
+            padding: 15px 30px;
+            font-family: inherit;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: all 0.1s;
+            margin: 10px;
+        }
+        button:hover { background: var(--text-color); color: #000; }
+        button:active { transform: scale(0.95); }
+
+        input {
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid var(--text-color);
+            color: var(--text-color);
+            font-family: inherit;
+            font-size: 1.5em;
+            text-align: center;
+            width: 200px;
+            outline: none;
+        }
+
+        /* 특수 효과 */
+        .glitch-text {
+            animation: glitch 1s infinite linear;
+            color: red;
+            font-weight: bold;
+            display: none; /* 초기엔 숨김 */
+        }
+
+        @keyframes glitch {
+            2%, 64% { transform: translate(2px,0) skew(0deg); }
+            4%, 60% { transform: translate(-2px,0) skew(0deg); }
+            62% { transform: translate(0,0) skew(5deg); }
+        }
+
+        .red-alert {
+            animation: pulse-red 1s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: inset 0 0 0px red; }
+            50% { box-shadow: inset 0 0 50px red; }
+            100% { box-shadow: inset 0 0 0px red; }
+        }
+        
+        #timer-display {
+            font-size: 3em;
+            color: red;
+            display: none;
+        }
+        
+        /* 숨겨진 버튼 (Stage 3용) */
+        #hidden-trigger {
+            color: #444; /* 종이 색과 비슷하게 */
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        #hidden-trigger:hover { color: #d00; }
+
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="manual-section" class="paper-texture">
+            <h2>표준 운영 절차서</h2>
+            <div id="manual-content">
+                <p><strong>제 1장: 기본 조작</strong></p>
+                <p>시스템 안정화를 위해 화면의 <span style="color:blue">"초기화(INIT)"</span> 버튼을 누르십시오.</p>
+                <p>절차를 준수하면 다음 구역이 개방됩니다.</p>
+            </div>
+            <div class="stamp">APPROVED</div>
+        </div>
+
+        <div id="control-section">
+            <div id="screen-log">
+                <div class="log-entry system-msg">> 시스템 부팅 완료...</div>
+                <div class="log-entry">> 사용자 인증됨.</div>
+                <div class="log-entry">> 대기 중...</div>
+            </div>
+
+            <div id="interaction-area">
+                <button id="action-btn" onclick="handleAction()">INIT</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 게임 상태 관리
+        let currentStage = 1;
+        let isGameOver = false;
+        
+        // DOM 요소
+        const manualContent = document.getElementById('manual-content');
+        const screenLog = document.getElementById('screen-log');
+        const interactionArea = document.getElementById('interaction-area');
+        const gameContainer = document.getElementById('game-container');
+
+        // 로그 출력 함수
+        function log(msg, type = 'normal') {
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            if(type === 'error') div.classList.add('error-msg');
+            if(type === 'system') div.classList.add('system-msg');
+            div.innerText = `> ${msg}`;
+            screenLog.appendChild(div);
+            screenLog.scrollTop = screenLog.scrollHeight;
+        }
+
+        // 스테이지 관리자
+        function handleAction(val = null) {
+            if (isGameOver) return;
+
+            if (currentStage === 1) {
+                // Stage 1: 단순 클릭 (신뢰 형성)
+                playSound('beep');
+                log("명령 승인됨. 보안 잠금 해제.", "system");
+                setTimeout(nextStage, 1500);
+            } 
+            else if (currentStage === 2) {
+                // Stage 2: 입력값 검증
+                const input = document.getElementById('stage2-input');
+                const userVal = input.value.toUpperCase();
+                
+                if (userVal === "HELP") {
+                     // 트릭: 정답은 HELP가 아님
+                    playSound('error');
+                    log("오류: 입력값이 매뉴얼과 일치하지 않습니다.", "error");
+                    // 힌트 연출: 매뉴얼 글자가 잠깐 바뀜
+                    const glitch = document.getElementById('glitch-hint');
+                    glitch.style.display = 'inline';
+                    setTimeout(() => { glitch.style.display = 'none'; }, 200);
+                    input.value = "";
+                } else if (userVal === "HELL") {
+                    // 정답 (HELP의 P를 뒤집으면 d? 아니, 그냥 글자 장난)
+                    // 기획 변경: 화면에는 HELP라고 써있지만, 
+                    // 글리치 효과로 P가 L로 보였어야 함. 'HELL'이 정답.
+                    playSound('beep');
+                    log("관리자 권한 승인. ...의외군요.", "system");
+                    setTimeout(nextStage, 1500);
+                } else {
+                    log("승인 거부.", "error");
+                    input.value = "";
+                }
+            }
+            else if (currentStage === 3) {
+                // Stage 3: 버튼 누르면 가속 (함정)
+                log("경고: 압력 수치 증가! 시스템 불안정!", "error");
+                playSound('error');
+                bgFlash();
+            }
+        }
+
+        function nextStage() {
+            currentStage++;
+            renderStage();
+        }
+
+        function renderStage() {
+            interactionArea.innerHTML = ''; // 초기화
+
+            if (currentStage === 2) {
+                // Stage 2 세팅
+                manualContent.innerHTML = `
+                    <p><strong>제 2장: 암호 입력</strong></p>
+                    <p>보안 유지를 위해 아래 코드를 입력하시오.</p>
+                    <h3 style="font-size: 2em; letter-spacing: 5px;">
+                        HEL<span id="glitch-hint" style="position:absolute; color:red; display:none;">L</span>P
+                    </h3>
+                    <p class="paper-texture" style="font-size:0.8em; color:#666;">* 오타 입력 시 경보가 울릴 수 있습니다.</p>
+                `;
+                interactionArea.innerHTML = `
+                    <input type="text" id="stage2-input" placeholder="CODE HERE" autocomplete="off">
+                    <button onclick="handleAction()">ENTER</button>
+                `;
+                log("2단계 보안 구역 진입.");
+            }
+            else if (currentStage === 3) {
+                // Stage 3 세팅
+                manualContent.innerHTML = `
+                    <p style="color:red"><strong>⚠ 비상 사태 ⚠</strong></p>
+                    <p>원자로 과부하 감지.</p>
+                    <p>즉시 <span style="background:black; color:white"> 대기 모드 </span> 버튼을 누르고 구조를 기다리십시오.</p>
+                    <p><strong>절대 자리를 이탈하지 마십시오.</strong></p>
+                    <br><br><br>
+                    <span id="hidden-trigger" onclick="trueEnding()">[규정 위반: 비상 탈출구 개방]</span>
+                `;
+                // 숨겨진 트리거 스타일링 (처음엔 잘 안보이게)
+                document.getElementById('hidden-trigger').style.opacity = '0.1';
+
+                interactionArea.innerHTML = `
+                    <div id="timer-display">10.00</div>
+                    <button onclick="handleAction()" style="border-color:red; color:red;">대기 모드 유지 (WAIT)</button>
+                `;
+                
+                log("경고: 붕괴 임박.", "error");
+                startCountdown();
+            }
+        }
+
+        // 카운트다운 및 엔딩 분기
+        function startCountdown() {
+            let timeLeft = 10.00;
+            const timerEl = document.getElementById('timer-display');
+            timerEl.style.display = 'block';
+            gameContainer.classList.add('red-alert');
+
+            const timer = setInterval(() => {
+                if (isGameOver) { clearInterval(timer); return; }
+
+                timeLeft -= 0.05;
+                timerEl.innerText = timeLeft.toFixed(2);
+
+                // 연출: 시간이 갈수록 매뉴얼의 숨겨진 버튼이 진해짐
+                if (timeLeft < 5) {
+                    document.getElementById('hidden-trigger').style.opacity = '1';
+                }
+
+                if (timeLeft <= 0) {
+                    clearInterval(timer);
+                    badEnding();
+                }
+            }, 50);
+        }
+
+        function badEnding() {
+            isGameOver = true;
+            gameContainer.classList.remove('red-alert');
+            interactionArea.innerHTML = `<h1 style="color:red">GAME OVER</h1>`;
+            manualContent.innerHTML = `
+                <h2 style="color:red">사망 진단서</h2>
+                <p>피험체는 끝까지 규정을 준수하였습니다.</p>
+                <p><strong>사인:</strong> 가스 질식 및 매몰.</p>
+                <p>참 잘했어요.</p>
+            `;
+            log("생체 신호 소실...", "error");
+        }
+
+        function trueEnding() {
+            isGameOver = true;
+            gameContainer.classList.remove('red-alert');
+            // 스타일 변경 (해방감)
+            document.body.style.backgroundColor = "#fff";
+            document.body.style.color = "#000";
+            gameContainer.style.border = "5px solid #000";
+            gameContainer.style.boxShadow = "none";
+            
+            manualContent.innerHTML = ``;
+            manualContent.style.background = "#fff";
+            manualContent.style.border = "none";
+
+            interactionArea.innerHTML = `
+                <h1 style="color:black; font-size:3em;">탈출 성공</h1>
+                <p>당신은 규정이 당신을 죽이려 한다는 것을 깨달았습니다.</p>
+                <p>더 이상 매뉴얼은 필요 없습니다.</p>
+                <button onclick="location.reload()" style="border:2px solid black; color:black;">다시 하기</button>
+            `;
+            
+            screenLog.style.background = "transparent";
+            screenLog.style.color = "black";
+            screenLog.innerHTML = "";
+            log("시스템 연결 해제.");
+            log("자유 의지 확인됨.");
+        }
+
+        // 유틸리티: 사운드 흉내
+        function playSound(type) {
+            // 실제 사운드 파일 없이 브라우저 기본 동작으로 피드백 느낌만
+            // 실제 구현시 Audio 객체 사용
+        }
+        
+        function bgFlash() {
+            document.body.style.backgroundColor = "#300";
+            setTimeout(() => {
+                document.body.style.backgroundColor = "var(--bg-color)";
+            }, 100);
+        }
+
+    </script>
+</body>
+</html>
